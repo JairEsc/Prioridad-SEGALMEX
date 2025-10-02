@@ -1,3 +1,4 @@
+library(openxlsx)
 "Datos/Localidades elegibles Diconsa.xlsx" |> openxlsx::read.xlsx()->Localidades_Elegibles
 "Datos/Localidades elegibles Diconsa.xlsx" |> openxlsx::read.xlsx(sheet = "Marginación")->Localidades_Elegibles_Marginacion
 "Datos/Localidades elegibles Diconsa.xlsx" |> openxlsx::read.xlsx(sheet = "resago alto")->Localidades_Elegibles_Rezago
@@ -27,31 +28,68 @@ localidades_c_pob=localidades_c_pob |>
 
 Localidades_Elegibles$cve[Localidades_Elegibles$NOM_LOC=='La Reforma de Palo Semita']='130180100'
 
-#######################
+################################################################################
+###Contribución Enrique
+################################################################################
+
 Localidades_Elegibles_c_geom_puntual=Localidades_Elegibles |> merge(localidades_c_pob |> 
                                                                       dplyr::mutate(cvegeo=substr(cvegeo,1,9)),
                                                                     by.x='cve', by.y='cvegeo') |> 
   dplyr::filter(st_geometry_type(geom)=='POINT') |> st_as_sf()
+
 Localidades_Elegibles_c_geom_polygon=Localidades_Elegibles |> merge(localidades_c_pob |> 
                                                                       dplyr::mutate(cvegeo=substr(cvegeo,1,9)),
                                                                     by.x='cve', by.y='cvegeo') |> 
   dplyr::filter(st_geometry_type(geom)=='MULTIPOLYGON') |> st_as_sf()
 
-
-
-leaflet()  |> 
-  addTiles(options = leaflet::tileOptions(opacity =0.6))|>
+###Hagamos el receunto para los municipios####
+Localidades_Elegibles_c_geom_puntual$MUN=substr(Localidades_Elegibles_c_geom_puntual$cve,1,5)
+Localidades_Elegibles_c_geom_polygon$MUN=substr(Localidades_Elegibles_c_geom_polygon$cve,1,5)
+municipios$N_Rezago=numeric(84)
+municipios$N_Pobreza_A=numeric(84)
+municipios$N_Pobreza_MA=numeric(84)
+for(i in 1:84){
+  municipios$N_Rezago[i]=nrow(Localidades_Elegibles_c_geom_puntual[Localidades_Elegibles_c_geom_puntual$Indice.de.rezago.alto=="Elegible" &
+                                                                    Localidades_Elegibles_c_geom_puntual$MUN==municipios$cvegeo[i],])+
+    nrow(Localidades_Elegibles_c_geom_polygon[Localidades_Elegibles_c_geom_polygon$Indice.de.rezago.alto=="Elegible" &
+                                                Localidades_Elegibles_c_geom_polygon$MUN==municipios$cvegeo[i],])
+  
+  municipios$N_Pobreza_A[i]=nrow(Localidades_Elegibles_c_geom_puntual[Localidades_Elegibles_c_geom_puntual$GM_2020=="Alto" &
+                                                                        Localidades_Elegibles_c_geom_puntual$MUN==municipios$cvegeo[i],])+
+    nrow(Localidades_Elegibles_c_geom_polygon[Localidades_Elegibles_c_geom_polygon$GM_2020=="Alto" &
+                                                Localidades_Elegibles_c_geom_polygon$MUN==municipios$cvegeo[i],])
+  
+  municipios$N_Pobreza_MA[i]=nrow(Localidades_Elegibles_c_geom_puntual[Localidades_Elegibles_c_geom_puntual$GM_2020=="Muy alto" &
+                                                                      Localidades_Elegibles_c_geom_puntual$MUN==municipios$cvegeo[i],])+
+    nrow(Localidades_Elegibles_c_geom_polygon[Localidades_Elegibles_c_geom_polygon$GM_2020=="Muy alto" &
+                                                Localidades_Elegibles_c_geom_polygon$MUN==municipios$cvegeo[i],])
+}
+municipios$TieneLocs=ifelse(municipios$N_Rezago==0 & municipios$N_Pobreza_A==0 & municipios$N_Pobreza_MA==0,
+                         NA,1)
+paleta_categorias=colorFactor(palette = c("#BDBDBD"),
+                              domain =c(T),
+                              alpha = T, na.color = rgb(0,0,0,0)
+)
+A=read_sf("../../../Reutilizables/regiones/Banco de datos infografias _Eduardo.xlsx")
+B=dplyr::select(A,Field1,Field8)
+B=B[!is.na(B$Field1) & B$Field1!="Municipio",]
+B=B[B$Field1!="Estatal",]
+municipios=merge(x = municipios,y = B,by.x="nomgeo",by.y="Field1",all.x=T)
+colnames(municipios)[colnames(municipios)=="Field8"]="POB"
+################################################################################
+mapa_web=leaflet()  |> 
+  addTiles(options = leaflet::tileOptions(opacity =1))|>
   setView(lng =-98.88704 ,lat =20.47901,zoom=9) |> 
   addPolygons(data=municipios,
-              label = municipios$nomgeo,fillColor = "gray",fillOpacity = 0.1,color = "white",weight = 3,group = "Municipios",
-              popup ="A" #generarPopupMunicipal()
+              label = municipios$nomgeo,fillColor = paleta_categorias(is.na(municipios$TieneLocs)),fillOpacity = 0.6,color = "white",weight = 2,group = "Municipios",
+              popup =generarPopup_Municipio() #"A" #generarPopupMunicipal()
                 ) |> 
   addPolygons(data=Localidades_Elegibles_c_geom_polygon |> st_transform(st_crs("EPSG:4326")),
-              fillColor ="brown" #colorear_rojos((localidades_urbanas_c_pobreza$valor_pobreza))
+              fillColor ="#621132" #colorear_rojos((localidades_urbanas_c_pobreza$valor_pobreza))
                 ,color = "black",weight = 0.1,opacity = 1,fillOpacity = 1,
               label = paste0(Localidades_Elegibles_c_geom_polygon$NOM_MUN,"-",Localidades_Elegibles_c_geom_polygon$NOM_LOC),
               
-              popup ="B" #generarPopup()
+              popup =generarPopup_Localidad_Poly() #"B" #generarPopup()
               # paste0("Municipio: ",localidades_urbanas_c_pobreza$Municipio," <br>",
               #              "Localidad: ",localidades_urbanas_c_pobreza$NOMGEO,"<br>",
               #              "pobtot: ",localidades_urbanas_c_pobreza$`Población del ITER**`,"<br>",
@@ -61,10 +99,10 @@ leaflet()  |>
               ,group = "Localidades urbanas"
   ) |> 
   addCircleMarkers(data=Localidades_Elegibles_c_geom_puntual |> st_transform(st_crs("EPSG:4326")),
-              fillColor ="lightblue" #colorear_rojos(as.numeric((localidades_rurales_poligonos_c_pobreza$`Pobr%`)))
+              fillColor ="#D4C29C" #colorear_rojos(as.numeric((localidades_rurales_poligonos_c_pobreza$`Pobr%`)))
                 ,color = "black",weight = 0.1,opacity = 1,fillOpacity = 1,radius = 100,
               label = paste0(Localidades_Elegibles_c_geom_puntual$NOM_MUN,"-",Localidades_Elegibles_c_geom_puntual$NOM_LOC),
-              popup = "C"#generarPopupRural()
+              popup = generarPopup_Localidad_Point()#"C"#generarPopupRural()
               #   paste0("Municipio: ",localidades_rurales_poligonos_c_pobreza$NOM_MUN," <br>",
               #                "Localidad: ",localidades_rurales_poligonos_c_pobreza$NOMGEO,"<br>",
               #                "pobtot: ",localidades_rurales_poligonos_c_pobreza$POBTOT,"<br>",
@@ -101,33 +139,21 @@ leaflet()  |>
       
       tags$h4("Metodología"),
       tags$p(
-        "La elaboración de este mapa se basó en dos fuentes principales de datos y abordó la estimación de la pobreza a dos niveles geográficos distintos:"
-      ),
-      tags$ul(
+        "Este mapa web muestra la elegibilidad a nivel de localidad para el programa social SEGALMEX. Se consideran elegibles aquellas localidades que cumplan cada uno de los siguientes criterios
+        "
+        
+      ),tags$ul(
         tags$li(
-          tags$strong("Localidades Urbanas (268 polígonos): "),
-          "Por primera vez,",tags$a(href = "https://www.coneval.org.mx/Medicion/Paginas/pobreza_localidad_urbana.aspx", "CONEVAL") ," publicó datos de pobreza a nivel de localidad urbana en 2020. Para estas localidades, filtramos la información para el estado de Hidalgo. Dado que CONEVAL presenta la información como un intervalo del porcentaje de pobreza, tomamos el punto medio de dicho intervalo. Combinamos este valor con los datos de población a nivel de localidad del",tags$a(href = "https://www.inegi.org.mx/programas/ccpv/2020/#tabulados", "INEGI 2020") ," para estimar la ",
-          tags$strong("población en pobreza"),
-          " en cada una de estas 268 localidades urbanas."
+          "Población total mayor o igual a 200 y menor a 15,000 habitantes"
         ),
         tags$li(
-          tags$strong("Otras Localidades (rurales y urbanas no cubiertas por CONEVAL a nivel localidad): "),
-          "Para el resto de las más de 5,000 localidades (entre urbanas y rurales) de Hidalgo que están georreferenciadas, se utilizó el ",
-          tags$strong("porcentaje de pobreza del municipio"),
-          " al que pertenecen. Con los datos de población de estas localidades reportados por INEGI, se estimó la población en pobreza utilizando los indicadores de pobreza a nivel municipal (pobreza, pobreza moderada y pobreza extrema)."
+          "Grado de Marginación Alta o Muy Alta"
+        ),
+        tags$li(
+          "Grado de Rezago Social Alto o Muy Alto"
         )
-      ),
-      tags$p(
-        "Adicionalmente, el mapa también presenta los datos de ",
-        tags$strong("población en pobreza"),
-        ", ",
-        tags$strong("pobreza extrema"),
-        " y ",
-        tags$strong("pobreza moderada"),
-        ", así como sus respectivos porcentajes, a ",
-        tags$strong("nivel municipal"),
-        "."
-      ),
+        ),
+      
       
       tags$button("Cerrar", onclick = "document.getElementById('infoModal').style.display='none'")
     )
@@ -163,5 +189,15 @@ leaflet()  |>
     // Llamar a resizeMarkers en eventos de zoom y al cargar el mapa
     map.on('zoomend', resizeMarkers);
     map.whenReady(resizeMarkers);
-    }")|> addLogo(img = "https://raw.githubusercontent.com/JairEsc/Gob/main/Otros_archivos/imagenes/Planeacion_sigeh.png",src = "remote",width = "400px",height='71px',position = "bottomleft") 
-mapa_web
+    }")|> 
+  addLogo(img = "https://raw.githubusercontent.com/JairEsc/Gob/main/Otros_archivos/imagenes/Planeacion_sigeh.png",src = "remote",width = "400px",height='71px',position = "bottomleft") |> 
+  addLegend(
+    position = "bottomright",
+    colors = c("#D4C29C", "#621132","#BDBDBD"), # 'transparent' for the circle icon
+    labels = c("Localidades rurales elegibles","Localidades urbanas elegibles","Municipios SIN localidades elegibles"),
+    title = "Simbología", # More descriptive title
+    opacity = 0.7,
+  )
+#mapa_web |> htmlwidgets::saveWidget("Mapa Web/Elegibilidad SEGALMEX.html",title = "Elegibilidad SEGALMEX",selfcontained = T)
+htmlwidgets::saveWidget(widget = mapa_web, file = "tmp.html",title = "Elegibilidad SEGALMEX", selfcontained = TRUE)
+file.rename("tmp.html", "Mapa Web/Elegibilidad SEGALMEX.html")
