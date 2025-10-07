@@ -81,7 +81,7 @@ mapa_web=leaflet()  |>
   addTiles(options = leaflet::tileOptions(opacity =1))|>
   setView(lng =-98.88704 ,lat =20.47901,zoom=9) |> 
   addPolygons(data=municipios,
-              label = municipios$nomgeo,fillColor = paleta_categorias(is.na(municipios$TieneLocs)),fillOpacity = 0.6,color = "white",weight = 2,group = "Municipios",
+              label = municipios$nomgeo,fillColor = paleta_categorias(is.na(municipios$TieneLocs)),fillOpacity = 0.6,color = "white",stroke =3 ,group = "Municipios",
               popup =generarPopup_Municipio() #"A" #generarPopupMunicipal()
                 ) |> 
   addPolygons(data=Localidades_Elegibles_c_geom_polygon |> st_transform(st_crs("EPSG:4326")),
@@ -99,7 +99,7 @@ mapa_web=leaflet()  |>
               ,group = "Localidades urbanas"
   ) |> 
   addCircleMarkers(data=Localidades_Elegibles_c_geom_puntual |> st_transform(st_crs("EPSG:4326")),
-              fillColor ="#D4C29C" #colorear_rojos(as.numeric((localidades_rurales_poligonos_c_pobreza$`Pobr%`)))
+              fillColor ="#CC9F5E" #colorear_rojos(as.numeric((localidades_rurales_poligonos_c_pobreza$`Pobr%`)))
                 ,color = "black",weight = 0.1,opacity = 1,fillOpacity = 1,radius = 100,
               label = paste0(Localidades_Elegibles_c_geom_puntual$NOM_MUN,"-",Localidades_Elegibles_c_geom_puntual$NOM_LOC),
               popup = generarPopup_Localidad_Point()#"C"#generarPopupRural()
@@ -193,7 +193,7 @@ mapa_web=leaflet()  |>
   addLogo(img = "https://raw.githubusercontent.com/JairEsc/Gob/main/Otros_archivos/imagenes/Planeacion_sigeh.png",src = "remote",width = "400px",height='71px',position = "bottomleft") |> 
   addLegend(
     position = "bottomright",
-    colors = c("#D4C29C", "#621132","#BDBDBD"), # 'transparent' for the circle icon
+    colors = c("#CC9F5E", "#621132","#BDBDBD"), # 'transparent' for the circle icon
     labels = c("Localidades rurales elegibles","Localidades urbanas elegibles","Municipios SIN localidades elegibles"),
     title = "Simbología", # More descriptive title
     opacity = 0.7,
